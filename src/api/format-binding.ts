@@ -1,12 +1,12 @@
-import { throwPhase1ShellError } from "./shared";
 import type {
   KeyplaneBindingSource,
   KeyplaneFormatOptions,
 } from "../types/public";
+import { formatBindingFromSource } from "../formatting/format-binding";
 
 export function formatBinding(
-  _binding: KeyplaneBindingSource,
-  _options?: KeyplaneFormatOptions,
+  binding: KeyplaneBindingSource,
+  options?: KeyplaneFormatOptions,
 ): string {
-  return throwPhase1ShellError();
+  return formatBindingFromSource(binding, options);
 }
