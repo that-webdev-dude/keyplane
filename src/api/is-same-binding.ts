@@ -1,9 +1,15 @@
-import { throwPhase1ShellError } from "./shared";
 import type { KeyplaneBindingSource } from "../types/public";
+import {
+  areNormalizedBindingsEqual,
+  normalizeBindingInput,
+} from "../binding/normalize";
 
 export function isSameBinding(
-  _left: KeyplaneBindingSource,
-  _right: KeyplaneBindingSource,
+  left: KeyplaneBindingSource,
+  right: KeyplaneBindingSource,
 ): boolean {
-  return throwPhase1ShellError();
+  return areNormalizedBindingsEqual(
+    normalizeBindingInput(left),
+    normalizeBindingInput(right),
+  );
 }

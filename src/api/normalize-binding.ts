@@ -1,11 +1,11 @@
-import { throwPhase1ShellError } from "./shared";
 import type {
   KeyplaneBindingInput,
   KeyplaneNormalizedBinding,
 } from "../types/public";
+import { normalizeBindingInput } from "../binding/normalize";
 
 export function normalizeBinding(
-  _binding: KeyplaneBindingInput,
+  binding: KeyplaneBindingInput,
 ): KeyplaneNormalizedBinding {
-  return throwPhase1ShellError();
+  return normalizeBindingInput(binding);
 }
