@@ -1,35 +1,42 @@
 {
   "name": "keyplane",
   "version": "0.1.0",
-  "description": "A TypeScript project scaffolded with devkit",
+  "description": "Browser-first keyboard shortcut core with layout-independent binding semantics.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
   "files": [
     "dist",
-    "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "dev": "tsx src/index.ts",
     "build": "tsup",
-    "start": "node dist/index.js",
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest watch",
-    "test:unit": "vitest run tests/unit",
+    "test:unit": "vitest run",
     "test:browser": "playwright test",
     "lint": "tsc --noEmit"
   },
   "keywords": [],
-  "author": "",
+  "author": "fabio barracano <that.webdev.dude@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/that-webdev-dude/keyplane.git"
+  },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
     "@types/node": "^20.11.5",
     "jsdom": "^26.1.0",
     "tsup": "^8.0.1",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^3.2.4"
   }
