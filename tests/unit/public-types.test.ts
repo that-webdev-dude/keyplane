@@ -20,13 +20,11 @@ describe("public type surface", () => {
   });
 
   it("exposes bind and formatting helper signatures through the public entry point", () => {
-    const manager = createKeyplane();
-
-    expectTypeOf(manager.bind).parameter(0).toEqualTypeOf<KeyplaneBindingInput>();
-    expectTypeOf(manager.bind).parameter(2).toEqualTypeOf<
+    expectTypeOf<KeyplaneManager["bind"]>().parameter(0).toEqualTypeOf<KeyplaneBindingInput>();
+    expectTypeOf<KeyplaneManager["bind"]>().parameter(2).toEqualTypeOf<
       KeyplaneBindOptions | undefined
     >();
-    expectTypeOf(manager.bind).returns.toEqualTypeOf<KeyplaneSubscription>();
+    expectTypeOf<KeyplaneManager["bind"]>().returns.toEqualTypeOf<KeyplaneSubscription>();
     expectTypeOf<KeyplaneFormatOptions>().toMatchTypeOf<KeyplaneFormatOptions>();
     expectTypeOf<KeyplaneNormalizedBinding>().toMatchTypeOf<KeyplaneNormalizedBinding>();
   });
