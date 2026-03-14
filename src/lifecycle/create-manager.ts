@@ -4,6 +4,16 @@ import { REGISTER_ERROR_CODES, createRegisterError } from "../errors/register-er
 import { normalizeKeyboardEvent, type KeyplaneNormalizedEventView } from "../matching/normalize-event";
 import { isEditableEventTarget, isEventWithinTargetBoundary } from "../platform/event-context";
 import { resolveManagerTarget, type KeyplaneRuntimeTarget } from "../platform/validate-target";
+import {
+  DEFAULT_SEQUENCE_TIMEOUT_MS,
+  advanceSequenceState,
+  createSequenceState,
+  hasActiveSequenceState,
+  hasSequenceTimedOut,
+  resetSequenceState,
+  startSequenceState,
+  type KeyplaneSequenceState,
+} from "../sequence/state";
 import type {
   KeyplaneEventType,
   KeyplaneHandler,
@@ -28,8 +38,10 @@ interface KeyplaneRegistration {
   stopPropagation: boolean;
   allowRepeat: boolean;
   allowInEditable: boolean;
+  sequenceTimeoutMs: number;
   enabled: boolean;
   disposed: boolean;
+  sequenceState: KeyplaneSequenceState;
 }
 
 interface KeyplaneManagerState {
@@ -37,6 +49,7 @@ interface KeyplaneManagerState {
   enabled: boolean;
   scope: string | null;
   defaultEventType: KeyplaneEventType;
+  defaultSequenceTimeoutMs: number;
   allowInEditable: boolean;
   target: KeyplaneRuntimeTarget;
   nextRegistrationId: number;
@@ -57,6 +70,8 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
       config?.defaultEventType,
       "defaultEventType",
     ),
+    defaultSequenceTimeoutMs:
+      config?.sequenceTimeoutMs ?? DEFAULT_SEQUENCE_TIMEOUT_MS,
     allowInEditable: config?.allowInEditable === true,
     target,
     nextRegistrationId: 1,
@@ -99,8 +114,11 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
         stopPropagation: options?.stopPropagation === true,
         allowRepeat: options?.allowRepeat === true,
         allowInEditable: options?.allowInEditable ?? state.allowInEditable,
+        sequenceTimeoutMs:
+          options?.sequenceTimeoutMs ?? state.defaultSequenceTimeoutMs,
         enabled: options?.enabled !== false,
         disposed: false,
+        sequenceState: createSequenceState(),
       };
 
       state.nextRegistrationId += 1;
@@ -111,7 +129,12 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
     },
     setScope(scope) {
       assertManagerUsable(state, "setScope");
-      state.scope = normalizeScopeValue(scope, "scope");
+      const nextScope = normalizeScopeValue(scope, "scope");
+
+      if (state.scope !== nextScope) {
+        resetAllSequenceState(state);
+        state.scope = nextScope;
+      }
     },
     getScope() {
       return state.scope;
@@ -123,6 +146,7 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
     disable() {
       assertManagerUsable(state, "disable");
       state.enabled = false;
+      resetAllSequenceState(state);
     },
     isEnabled() {
       return !state.destroyed && state.enabled;
@@ -138,6 +162,7 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
       for (const registration of state.registrations.values()) {
         registration.disposed = true;
         registration.enabled = false;
+        resetSequenceState(registration.sequenceState);
       }
 
       state.registrations.clear();
@@ -166,6 +191,7 @@ function createSubscription(
 
       registration.disposed = true;
       registration.enabled = false;
+      resetSequenceState(registration.sequenceState);
 
       if (state.destroyed) {
         return;
@@ -187,6 +213,7 @@ function createSubscription(
       }
 
       registration.enabled = false;
+      resetSequenceState(registration.sequenceState);
     },
     isEnabled() {
       return !state.destroyed && !registration.disposed && registration.enabled;
@@ -222,26 +249,30 @@ function createPhaseListener(
     }
 
     const registrations = [...state.registrations.values()];
+    const now = Date.now();
 
     for (const registration of registrations) {
-      if (!isRegistrationEligible(registration, state, normalizedEvent.view, eventTarget)) {
+      if (!isRegistrationEventEligible(registration, state, normalizedEvent.view, eventTarget)) {
         continue;
       }
 
-      if (registration.preventDefault) {
-        normalizedEvent.event.preventDefault();
+      if (registration.binding.steps.length === 1) {
+        if (!stepMatchesEvent(registration.binding, registration.binding.steps[0], normalizedEvent.view)) {
+          continue;
+        }
+
+        invokeRegistrationHandler(registration, normalizedEvent.event, state.scope, getManager());
+        continue;
       }
 
-      if (registration.stopPropagation) {
-        normalizedEvent.event.stopPropagation();
-      }
-
-      registration.handler({
-        event: normalizedEvent.event,
-        binding: registration.binding,
-        scope: state.scope,
-        manager: getManager(),
-      });
+      processSequenceRegistration(
+        registration,
+        normalizedEvent.event,
+        normalizedEvent.view,
+        state.scope,
+        now,
+        getManager(),
+      );
     }
   };
 }
@@ -281,6 +312,12 @@ function detachPhaseListener(
 
   state.target.removeEventListener(eventType, state.phaseHandlers[eventType], false);
   state.phaseListenersAttached[eventType] = false;
+}
+
+function resetAllSequenceState(state: KeyplaneManagerState): void {
+  for (const registration of state.registrations.values()) {
+    resetSequenceState(registration.sequenceState);
+  }
 }
 
 function assertManagerUsable(
@@ -392,7 +429,7 @@ function freezeBinding(
   });
 }
 
-function isRegistrationEligible(
+function isRegistrationEventEligible(
   registration: KeyplaneRegistration,
   state: KeyplaneManagerState,
   event: KeyplaneNormalizedEventView,
@@ -414,27 +451,82 @@ function isRegistrationEligible(
     return false;
   }
 
-  if (registration.binding.steps.length !== 1) {
-    return false;
-  }
-
-  const step = registration.binding.steps[0];
-  const primaryKey =
-    registration.binding.mode === "physical" ? event.physicalKey : event.semanticKey;
-
-  if (primaryKey !== step.key) {
-    return false;
-  }
-
-  if (!modifiersMatch(step.modifiers, event.modifiers)) {
-    return false;
-  }
-
   if (!registration.allowRepeat && event.repeat) {
     return false;
   }
 
   return true;
+}
+
+function processSequenceRegistration(
+  registration: KeyplaneRegistration,
+  event: KeyboardEvent,
+  eventView: KeyplaneNormalizedEventView,
+  activeScope: string | null,
+  now: number,
+  manager: KeyplaneManager,
+): void {
+  if (hasSequenceTimedOut(registration.sequenceState, now)) {
+    resetSequenceState(registration.sequenceState);
+  }
+
+  if (hasActiveSequenceState(registration.sequenceState)) {
+    const nextStep = registration.binding.steps[registration.sequenceState.nextStepIndex];
+
+    if (stepMatchesEvent(registration.binding, nextStep, eventView)) {
+      const finalStepIndex = registration.binding.steps.length - 1;
+
+      if (registration.sequenceState.nextStepIndex === finalStepIndex) {
+        resetSequenceState(registration.sequenceState);
+        invokeRegistrationHandler(registration, event, activeScope, manager);
+        return;
+      }
+
+      advanceSequenceState(registration.sequenceState, registration.sequenceTimeoutMs, now);
+      return;
+    }
+
+    resetSequenceState(registration.sequenceState);
+  }
+
+  if (!stepMatchesEvent(registration.binding, registration.binding.steps[0], eventView)) {
+    return;
+  }
+
+  startSequenceState(registration.sequenceState, registration.sequenceTimeoutMs, now);
+}
+
+function invokeRegistrationHandler(
+  registration: KeyplaneRegistration,
+  event: KeyboardEvent,
+  activeScope: string | null,
+  manager: KeyplaneManager,
+): void {
+  if (registration.preventDefault) {
+    event.preventDefault();
+  }
+
+  if (registration.stopPropagation) {
+    event.stopPropagation();
+  }
+
+  registration.handler({
+    event,
+    binding: registration.binding,
+    scope: activeScope,
+    manager,
+  });
+}
+
+function stepMatchesEvent(
+  binding: KeyplaneNormalizedBinding,
+  step: KeyplaneNormalizedStep,
+  event: KeyplaneNormalizedEventView,
+): boolean {
+  const primaryKey =
+    binding.mode === "physical" ? event.physicalKey : event.semanticKey;
+
+  return primaryKey === step.key && modifiersMatch(step.modifiers, event.modifiers);
 }
 
 function isScopeEligible(
