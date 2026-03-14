@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatBinding } from "../../../src/index";
+import { formatBinding, normalizeBinding } from "../../../src/index";
+import { resetLayoutMapForTests } from "../../../src/platform/layout-map";
 
 function expectKeyplaneError(action: () => unknown, code: string): void {
   try {
@@ -14,6 +15,11 @@ function expectKeyplaneError(action: () => unknown, code: string): void {
 }
 
 describe("formatBinding", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetLayoutMapForTests();
+  });
+
   it("formats semantic bindings from normalized meaning and preserves printable case", () => {
     expect(
       formatBinding({
@@ -44,6 +50,33 @@ describe("formatBinding", () => {
     };
 
     expect(formatBinding(normalizedBinding)).toBe("Ctrl+S");
+  });
+
+  it("does not change normalized binding meaning when layout-aware display is available", async () => {
+    vi.stubGlobal("navigator", {
+      keyboard: {
+        getLayoutMap: vi.fn().mockResolvedValue(
+          new Map<string, string>([["Minus", "-"]]),
+        ),
+      },
+    });
+
+    const normalizedBinding = normalizeBinding("Ctrl+Minus");
+
+    expect(normalizedBinding).toEqual({
+      mode: "physical",
+      steps: [{ key: "Minus", modifiers: ["Control"] }],
+    });
+
+    formatBinding(normalizedBinding);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(formatBinding(normalizedBinding)).toBe("Ctrl+-");
+
+    expect(normalizedBinding).toEqual({
+      mode: "physical",
+      steps: [{ key: "Minus", modifiers: ["Control"] }],
+    });
   });
 
   it("formats sequences in normalized step order and honors the sequence joiner override", () => {
@@ -103,6 +136,84 @@ describe("formatBinding", () => {
 
   it("defaults preferLayout to true without requiring layout discovery for success", () => {
     expect(formatBinding("Ctrl+Minus")).toBe("Ctrl+Minus");
+  });
+
+  it("uses layout-aware physical labels only after optional discovery resolves", async () => {
+    vi.stubGlobal("navigator", {
+      keyboard: {
+        getLayoutMap: vi.fn().mockResolvedValue(
+          new Map<string, string>([
+            ["Minus", "-"],
+            ["BracketLeft", "u"],
+          ]),
+        ),
+      },
+    });
+
+    expect(formatBinding("Ctrl+Minus")).toBe("Ctrl+Minus");
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(formatBinding("Ctrl+Minus")).toBe("Ctrl+-");
+    expect(formatBinding("BracketLeft")).toBe("u");
+  });
+
+  it("keeps semantic bindings and canonical style independent from layout-aware display", async () => {
+    vi.stubGlobal("navigator", {
+      keyboard: {
+        getLayoutMap: vi.fn().mockResolvedValue(
+          new Map<string, string>([["Minus", "-"]]),
+        ),
+      },
+    });
+
+    formatBinding("Minus");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(formatBinding("key:-")).toBe("-");
+    expect(formatBinding("Minus", { style: "canonical" })).toBe("Minus");
+    expect(formatBinding("Minus", { preferLayout: false })).toBe("Minus");
+  });
+
+  it("falls back when optional layout discovery rejects or yields no reliable label", async () => {
+    vi.stubGlobal("navigator", {
+      keyboard: {
+        getLayoutMap: vi.fn()
+          .mockRejectedValueOnce(new Error("denied"))
+          .mockResolvedValueOnce(new Map<string, string>([["Minus", ""]])),
+      },
+    });
+
+    expect(formatBinding("Minus")).toBe("Minus");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(formatBinding("Minus")).toBe("Minus");
+
+    resetLayoutMapForTests();
+
+    expect(formatBinding("Minus")).toBe("Minus");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(formatBinding("Minus")).toBe("Minus");
+  });
+
+  it("does not apply optional layout-aware enhancement to non-punctuation physical fallback labels", async () => {
+    vi.stubGlobal("navigator", {
+      keyboard: {
+        getLayoutMap: vi.fn().mockResolvedValue(
+          new Map<string, string>([["KeyQ", "A"]]),
+        ),
+      },
+    });
+
+    expect(formatBinding("KeyQ")).toBe("Q");
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(formatBinding("KeyQ")).toBe("Q");
   });
 
   it("does not treat the physical catch-all rule as expanding the closed v1 token set", () => {

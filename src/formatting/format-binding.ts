@@ -7,6 +7,7 @@ import type {
 } from "../types/public";
 import { normalizeBindingInput } from "../binding/normalize";
 import { createFormatError, FORMAT_ERROR_CODES } from "../errors/format-error";
+import { getLayoutAwarePhysicalKeyLabel } from "../platform/layout-map";
 
 const DEFAULT_SEQUENCE_JOINER = "then";
 const COMBO_JOINER = "+";
@@ -51,7 +52,14 @@ export function formatBindingFromSource(
   const resolvedOptions = normalizeFormatOptions(options);
 
   return normalized.steps
-    .map((step) => formatStep(normalized.mode, step, resolvedOptions.style))
+    .map((step) =>
+      formatStep(
+        normalized.mode,
+        step,
+        resolvedOptions.style,
+        resolvedOptions.preferLayout,
+      ),
+    )
     .join(` ${resolvedOptions.sequenceJoiner} `);
 }
 
@@ -135,6 +143,7 @@ function formatStep(
   mode: KeyplaneNormalizedBinding["mode"],
   step: KeyplaneNormalizedStep,
   style: "default" | "canonical",
+  preferLayout: boolean,
 ): string {
   const modifierLabels = step.modifiers.map((modifier) =>
     style === "canonical" ? modifier : DEFAULT_MODIFIER_LABELS[modifier],
@@ -144,9 +153,21 @@ function formatStep(
       ? step.key
       : mode === "semantic"
         ? step.key
-        : formatPhysicalFallbackLabel(step.key);
+        : formatPhysicalPrimaryLabel(step.key, preferLayout);
 
   return [...modifierLabels, primaryLabel].join(COMBO_JOINER);
+}
+
+function formatPhysicalPrimaryLabel(key: string, preferLayout: boolean): string {
+  if (preferLayout) {
+    const layoutLabel = getLayoutAwarePhysicalKeyLabel(key);
+
+    if (layoutLabel) {
+      return layoutLabel;
+    }
+  }
+
+  return formatPhysicalFallbackLabel(key);
 }
 
 function formatPhysicalFallbackLabel(key: string): string {
