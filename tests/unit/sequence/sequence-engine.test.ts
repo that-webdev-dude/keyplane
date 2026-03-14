@@ -24,16 +24,32 @@ afterEach(() => {
 });
 
 describe("sequence engine", () => {
-  it("keeps incomplete sequences silent and fires only on completion", () => {
+  it("starts only from the first step, stays silent while incomplete, and completes in order", () => {
+    const manager = createKeyplane();
+    const handler = vi.fn();
+
+    manager.bind("KeyG then KeyC", handler);
+
+    dispatchKeyboardEvent(document.body, "keydown", { code: "KeyC", key: "c" });
+    expect(handler).toHaveBeenCalledTimes(0);
+
+    dispatchKeyboardEvent(document.body, "keydown", { code: "KeyG", key: "g" });
+    expect(handler).toHaveBeenCalledTimes(0);
+
+    dispatchKeyboardEvent(document.body, "keydown", { code: "KeyC", key: "c" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("fires a completed sequence exactly once and clears progress immediately after completion", () => {
     const manager = createKeyplane();
     const handler = vi.fn();
 
     manager.bind("KeyG then KeyC", handler);
 
     dispatchKeyboardEvent(document.body, "keydown", { code: "KeyG", key: "g" });
-    expect(handler).toHaveBeenCalledTimes(0);
-
     dispatchKeyboardEvent(document.body, "keydown", { code: "KeyC", key: "c" });
+    dispatchKeyboardEvent(document.body, "keydown", { code: "KeyC", key: "c" });
+
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
@@ -91,5 +107,17 @@ describe("sequence engine", () => {
     dispatchKeyboardEvent(document.body, "keydown", { code: "KeyC", key: "c" });
 
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects exact-prefix conflicts with the registration error family", () => {
+    const manager = createKeyplane();
+
+    manager.bind("KeyG then KeyC", () => {});
+
+    expect(() => manager.bind("KeyG", () => {})).toThrowError(
+      expect.objectContaining({
+        code: "KP_REGISTER_PREFIX_CONFLICT",
+      }),
+    );
   });
 });

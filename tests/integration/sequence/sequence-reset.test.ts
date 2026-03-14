@@ -51,7 +51,7 @@ describe("sequence reset integration", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("clears per-subscription sequence state on disable and dispose", () => {
+  it("clears per-subscription sequence state on subscription disable and dispose", () => {
     const manager = createKeyplane();
     const disabledHandler = vi.fn();
     const disposedHandler = vi.fn();
@@ -74,7 +74,7 @@ describe("sequence reset integration", () => {
     expect(disposedHandler).toHaveBeenCalledTimes(0);
   });
 
-  it("clears active sequence state on destroy", () => {
+  it("clears active sequence state on destroy and preserves lifecycle error families afterward", () => {
     const manager = createKeyplane();
     const handler = vi.fn();
 
@@ -85,5 +85,10 @@ describe("sequence reset integration", () => {
     dispatchKeyboardEvent(document.body, "keydown", { code: "KeyC", key: "c" });
 
     expect(handler).toHaveBeenCalledTimes(0);
+    expect(() => manager.bind("KeyG then KeyC", handler)).toThrowError(
+      expect.objectContaining({
+        code: "KP_LIFECYCLE_MANAGER_DESTROYED",
+      }),
+    );
   });
 });
