@@ -55,11 +55,11 @@ function assertKeyboardCapability(): void {
     );
   }
 
-  for (const property of ["code", "key", "repeat"] as const) {
+  for (const property of ["code", "key", "repeat", "getModifierState"] as const) {
     if (!(property in (prototype as object))) {
       throw createPlatformError(
         PLATFORM_ERROR_CODES.MISSING_KEYBOARD_CAPABILITY,
-        "Keyplane requires KeyboardEvent code, key, and repeat support.",
+        "Keyplane requires KeyboardEvent code, key, repeat, and modifier-state support.",
         { property },
       );
     }

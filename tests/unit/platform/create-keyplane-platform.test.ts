@@ -37,6 +37,7 @@ describe("createKeyplane platform validation", () => {
       code: { get: () => "" },
       key: { get: () => "" },
       repeat: { get: () => false },
+      getModifierState: { value: () => false },
     });
 
     vi.stubGlobal("KeyboardEvent", FakeKeyboardEvent);

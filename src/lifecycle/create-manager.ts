@@ -1,6 +1,8 @@
 import { normalizeBindingInput } from "../binding/normalize";
 import { LIFECYCLE_ERROR_CODES, createLifecycleError } from "../errors/lifecycle-error";
 import { REGISTER_ERROR_CODES, createRegisterError } from "../errors/register-error";
+import { normalizeKeyboardEvent, type KeyplaneNormalizedEventView } from "../matching/normalize-event";
+import { isEditableEventTarget, isEventWithinTargetBoundary } from "../platform/event-context";
 import { resolveManagerTarget, type KeyplaneRuntimeTarget } from "../platform/validate-target";
 import type {
   KeyplaneEventType,
@@ -22,6 +24,10 @@ interface KeyplaneRegistration {
   eventType: KeyplaneEventType;
   handler: KeyplaneHandler;
   scope: string | null;
+  preventDefault: boolean;
+  stopPropagation: boolean;
+  allowRepeat: boolean;
+  allowInEditable: boolean;
   enabled: boolean;
   disposed: boolean;
 }
@@ -31,6 +37,7 @@ interface KeyplaneManagerState {
   enabled: boolean;
   scope: string | null;
   defaultEventType: KeyplaneEventType;
+  allowInEditable: boolean;
   target: KeyplaneRuntimeTarget;
   nextRegistrationId: number;
   registrations: Map<number, KeyplaneRegistration>;
@@ -41,6 +48,7 @@ interface KeyplaneManagerState {
 
 export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
   const target = resolveManagerTarget(config);
+  let manager!: KeyplaneManager;
   const state: KeyplaneManagerState = {
     destroyed: false,
     enabled: config?.enabled !== false,
@@ -49,6 +57,7 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
       config?.defaultEventType,
       "defaultEventType",
     ),
+    allowInEditable: config?.allowInEditable === true,
     target,
     nextRegistrationId: 1,
     registrations: new Map(),
@@ -61,12 +70,12 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
       keyup: false,
     },
     phaseHandlers: {
-      keydown: createPhaseListener("keydown", () => state),
-      keyup: createPhaseListener("keyup", () => state),
+      keydown: createPhaseListener("keydown", () => state, () => manager),
+      keyup: createPhaseListener("keyup", () => state, () => manager),
     },
   };
 
-  const manager: KeyplaneManager = {
+  manager = {
     bind(binding, handler, options) {
       assertManagerUsable(state, "bind");
 
@@ -86,6 +95,10 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
         eventType,
         handler,
         scope,
+        preventDefault: options?.preventDefault === true,
+        stopPropagation: options?.stopPropagation === true,
+        allowRepeat: options?.allowRepeat === true,
+        allowInEditable: options?.allowInEditable ?? state.allowInEditable,
         enabled: options?.enabled !== false,
         disposed: false,
       };
@@ -182,17 +195,54 @@ function createSubscription(
 }
 
 function createPhaseListener(
-  _eventType: KeyplaneEventType,
+  eventType: KeyplaneEventType,
   getState: () => KeyplaneManagerState,
+  getManager: () => KeyplaneManager,
 ): EventListener {
-  return (_event) => {
+  return (event) => {
     const state = getState();
 
     if (state.destroyed || !state.enabled) {
       return;
     }
 
-    // Phase 4 owns listener lifecycle only. Matching is implemented later.
+    const normalizedEvent = normalizeKeyboardEvent(event);
+    const eventTarget = normalizedEvent.event.target;
+
+    if (normalizedEvent.view.eventType !== eventType) {
+      return;
+    }
+
+    if (
+      normalizedEvent.view.composing ||
+      normalizedEvent.view.deadKey ||
+      !isEventWithinTargetBoundary(state.target, eventTarget)
+    ) {
+      return;
+    }
+
+    const registrations = [...state.registrations.values()];
+
+    for (const registration of registrations) {
+      if (!isRegistrationEligible(registration, state, normalizedEvent.view, eventTarget)) {
+        continue;
+      }
+
+      if (registration.preventDefault) {
+        normalizedEvent.event.preventDefault();
+      }
+
+      if (registration.stopPropagation) {
+        normalizedEvent.event.stopPropagation();
+      }
+
+      registration.handler({
+        event: normalizedEvent.event,
+        binding: registration.binding,
+        scope: state.scope,
+        manager: getManager(),
+      });
+    }
   };
 }
 
@@ -340,6 +390,75 @@ function freezeBinding(
       ),
     ),
   });
+}
+
+function isRegistrationEligible(
+  registration: KeyplaneRegistration,
+  state: KeyplaneManagerState,
+  event: KeyplaneNormalizedEventView,
+  eventTarget: EventTarget | null,
+): boolean {
+  if (
+    registration.disposed ||
+    !registration.enabled ||
+    registration.eventType !== event.eventType
+  ) {
+    return false;
+  }
+
+  if (!isScopeEligible(registration.scope, state.scope)) {
+    return false;
+  }
+
+  if (!registration.allowInEditable && isEditableEventTarget(eventTarget)) {
+    return false;
+  }
+
+  if (registration.binding.steps.length !== 1) {
+    return false;
+  }
+
+  const step = registration.binding.steps[0];
+  const primaryKey =
+    registration.binding.mode === "physical" ? event.physicalKey : event.semanticKey;
+
+  if (primaryKey !== step.key) {
+    return false;
+  }
+
+  if (!modifiersMatch(step.modifiers, event.modifiers)) {
+    return false;
+  }
+
+  if (!registration.allowRepeat && event.repeat) {
+    return false;
+  }
+
+  return true;
+}
+
+function isScopeEligible(
+  bindingScope: string | null,
+  activeScope: string | null,
+): boolean {
+  return bindingScope === null || bindingScope === activeScope;
+}
+
+function modifiersMatch(
+  expected: readonly string[],
+  actual: readonly string[],
+): boolean {
+  if (expected.length !== actual.length) {
+    return false;
+  }
+
+  for (let index = 0; index < expected.length; index += 1) {
+    if (expected[index] !== actual[index]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function normalizeScopeValue(
