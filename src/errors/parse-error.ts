@@ -1,4 +1,4 @@
-import { KeyplaneError } from "./keyplane-error";
+import { KeyplaneError, type KeyplaneErrorDetails } from "./keyplane-error";
 
 export const PARSE_ERROR_CODES = {
   EMPTY_INPUT: "KP_PARSE_EMPTY_INPUT",
@@ -20,7 +20,7 @@ export type KeyplaneParseErrorCode =
 export function createParseError(
   code: KeyplaneParseErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  details?: KeyplaneErrorDetails,
 ): KeyplaneError {
-  return new KeyplaneError(code, message, details);
+  return new KeyplaneError(code, message, { details });
 }

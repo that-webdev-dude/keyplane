@@ -1,4 +1,4 @@
-import { KeyplaneError } from "./keyplane-error";
+import { KeyplaneError, type KeyplaneErrorDetails } from "./keyplane-error";
 
 export const PLATFORM_ERROR_CODES = {
   UNSUPPORTED_RUNTIME: "KP_PLATFORM_UNSUPPORTED_RUNTIME",
@@ -14,7 +14,7 @@ export type KeyplanePlatformErrorCode =
 export function createPlatformError(
   code: KeyplanePlatformErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  details?: KeyplaneErrorDetails,
 ): KeyplaneError {
-  return new KeyplaneError(code, message, details);
+  return new KeyplaneError(code, message, { details });
 }

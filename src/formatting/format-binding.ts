@@ -80,8 +80,11 @@ function normalizeFormattingInput(
       FORMAT_ERROR_CODES.INVALID_BINDING,
       "Binding could not be normalized for formatting.",
       error instanceof Error && "code" in error
-        ? { causeCode: (error as Error & { code: string }).code }
-        : undefined,
+        ? {
+            details: { causeCode: (error as Error & { code: string }).code },
+            cause: error,
+          }
+        : { cause: error },
     );
   }
 }

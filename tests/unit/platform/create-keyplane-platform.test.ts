@@ -77,4 +77,30 @@ describe("createKeyplane platform validation", () => {
       "KP_PLATFORM_MISSING_KEYBOARD_CAPABILITY",
     );
   });
+
+  it("rejects HTMLElement-like targets that lack DOM containment capability", () => {
+    class FakeKeyboardEvent {}
+
+    Object.defineProperties(FakeKeyboardEvent.prototype, {
+      code: { get: () => "" },
+      key: { get: () => "" },
+      repeat: { get: () => false },
+      getModifierState: { value: () => false },
+    });
+
+    vi.stubGlobal("KeyboardEvent", FakeKeyboardEvent);
+    vi.stubGlobal("HTMLElement", undefined);
+
+    expectKeyplaneError(
+      () =>
+        createKeyplane({
+          target: {
+            nodeType: 1,
+            addEventListener() {},
+            removeEventListener() {},
+          } as never,
+        }),
+      "KP_PLATFORM_MISSING_DOM_CONTAINMENT_CAPABILITY",
+    );
+  });
 });

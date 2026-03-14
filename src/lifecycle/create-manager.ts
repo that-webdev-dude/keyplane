@@ -93,6 +93,7 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
   manager = {
     bind(binding, handler, options) {
       assertManagerUsable(state, "bind");
+      assertSupportedBindingObjectInput(binding);
 
       const normalizedBinding = normalizeBindingInput(binding);
       const eventType = normalizeEventTypeValue(
@@ -174,6 +175,19 @@ export function createManager(config?: KeyplaneManagerConfig): KeyplaneManager {
   };
 
   return manager;
+}
+
+function assertSupportedBindingObjectInput(binding: unknown): void {
+  if (typeof binding === "string" || !isObjectLike(binding)) {
+    return;
+  }
+
+  if (!("mode" in binding) || !("steps" in binding) || Array.isArray(binding)) {
+    throw createRegisterError(
+      REGISTER_ERROR_CODES.UNSUPPORTED_BINDING_OBJECT,
+      "Binding object shape is not supported for registration.",
+    );
+  }
 }
 
 function createSubscription(
@@ -583,4 +597,8 @@ function normalizeEventTypeValue(
     LIFECYCLE_ERROR_CODES.INVALID_STATE,
     `${source} must be 'keydown' or 'keyup'.`,
   );
+}
+
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

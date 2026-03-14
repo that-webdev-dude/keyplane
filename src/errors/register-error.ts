@@ -1,4 +1,4 @@
-import { KeyplaneError } from "./keyplane-error";
+import { KeyplaneError, type KeyplaneErrorDetails } from "./keyplane-error";
 
 export const REGISTER_ERROR_CODES = {
   PREFIX_CONFLICT: "KP_REGISTER_PREFIX_CONFLICT",
@@ -11,7 +11,7 @@ export type KeyplaneRegisterErrorCode =
 export function createRegisterError(
   code: KeyplaneRegisterErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  details?: KeyplaneErrorDetails,
 ): KeyplaneError {
-  return new KeyplaneError(code, message, details);
+  return new KeyplaneError(code, message, { details });
 }

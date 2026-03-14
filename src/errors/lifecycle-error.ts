@@ -1,4 +1,4 @@
-import { KeyplaneError } from "./keyplane-error";
+import { KeyplaneError, type KeyplaneErrorDetails } from "./keyplane-error";
 
 export const LIFECYCLE_ERROR_CODES = {
   MANAGER_DESTROYED: "KP_LIFECYCLE_MANAGER_DESTROYED",
@@ -11,7 +11,7 @@ export type KeyplaneLifecycleErrorCode =
 export function createLifecycleError(
   code: KeyplaneLifecycleErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  details?: KeyplaneErrorDetails,
 ): KeyplaneError {
-  return new KeyplaneError(code, message, details);
+  return new KeyplaneError(code, message, { details });
 }

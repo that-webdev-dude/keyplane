@@ -70,6 +70,15 @@ describe("Keyplane manager lifecycle shell", () => {
     );
   });
 
+  it("rejects unsupported binding object shapes during registration", () => {
+    const manager = createKeyplane();
+
+    expectKeyplaneError(
+      () => manager.bind({ unsupported: true } as never, () => {}),
+      "KP_REGISTER_UNSUPPORTED_BINDING_OBJECT",
+    );
+  });
+
   it("allows prefix-related bindings when the matching domain differs", () => {
     const manager = createKeyplane();
 
@@ -172,6 +181,11 @@ describe("Keyplane manager lifecycle shell", () => {
     );
     expectKeyplaneError(
       () => manager.disable(),
+      "KP_LIFECYCLE_MANAGER_DESTROYED",
+    );
+
+    expectKeyplaneError(
+      () => manager.bind({ unsupported: true } as never, () => {}),
       "KP_LIFECYCLE_MANAGER_DESTROYED",
     );
   });

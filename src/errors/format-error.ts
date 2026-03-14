@@ -1,4 +1,8 @@
-import { KeyplaneError } from "./keyplane-error";
+import {
+  KeyplaneError,
+  type KeyplaneErrorDetails,
+  type KeyplaneErrorOptions,
+} from "./keyplane-error";
 
 export const FORMAT_ERROR_CODES = {
   INVALID_BINDING: "KP_FORMAT_INVALID_BINDING",
@@ -11,7 +15,22 @@ export type KeyplaneFormatErrorCode =
 export function createFormatError(
   code: KeyplaneFormatErrorCode,
   message: string,
-  details?: Record<string, unknown>,
+  detailsOrOptions?: KeyplaneErrorDetails | KeyplaneErrorOptions,
 ): KeyplaneError {
-  return new KeyplaneError(code, message, details);
+  return new KeyplaneError(
+    code,
+    message,
+    isErrorOptions(detailsOrOptions)
+      ? detailsOrOptions
+      : { details: detailsOrOptions },
+  );
+}
+
+function isErrorOptions(
+  value: KeyplaneErrorDetails | KeyplaneErrorOptions | undefined,
+): value is KeyplaneErrorOptions {
+  return (
+    value !== undefined &&
+    ("details" in value || "cause" in value)
+  );
 }
