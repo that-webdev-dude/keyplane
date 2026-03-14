@@ -188,3 +188,76 @@ test("browser matching canonicalizes semantic Space and suppresses composition/d
 
   expect(result).toEqual(["space"]);
 });
+
+test("browser HTMLElement targets only match inside their subtree", async ({ page }) => {
+  ensureBuild();
+
+  await page.route("http://keyplane.test/**", async (route) => {
+    const url = new URL(route.request().url());
+
+    if (url.pathname === "/") {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `
+          <!doctype html>
+          <html>
+            <body>
+              <section id="inside-host">
+                <button id="inside-trigger">Inside</button>
+              </section>
+              <button id="outside-trigger">Outside</button>
+              <script type="module" src="/dist/index.js"></script>
+            </body>
+          </html>
+        `,
+      });
+      return;
+    }
+
+    if (url.pathname === "/dist/index.js") {
+      await route.fulfill({
+        contentType: "application/javascript",
+        body: readFileSync(path.resolve("dist/index.js"), "utf8"),
+      });
+      return;
+    }
+
+    await route.abort();
+  });
+
+  await page.goto("http://keyplane.test/");
+
+  const result = await page.evaluate(async () => {
+    const { createKeyplane } = await import("http://keyplane.test/dist/index.js");
+    const seen: string[] = [];
+    const insideHost = document.getElementById("inside-host") as HTMLElement;
+    const insideTrigger = document.getElementById("inside-trigger") as HTMLButtonElement;
+    const outsideTrigger = document.getElementById("outside-trigger") as HTMLButtonElement;
+
+    const manager = createKeyplane({ target: insideHost });
+
+    manager.bind("KeyT", () => {
+      seen.push("inside");
+    });
+
+    insideTrigger.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        code: "KeyT",
+        key: "t",
+      }),
+    );
+
+    outsideTrigger.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        code: "KeyT",
+        key: "t",
+      }),
+    );
+
+    return seen;
+  });
+
+  expect(result).toEqual(["inside"]);
+});

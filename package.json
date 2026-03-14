@@ -1,7 +1,7 @@
 {
   "name": "keyplane",
   "version": "0.1.0",
-  "description": "Browser-first keyboard shortcut core with layout-independent binding semantics.",
+  "description": "Browser-first keyboard shortcut core for layout-independent physical and semantic bindings.",
   "type": "module",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -18,19 +18,33 @@
   ],
   "scripts": {
     "build": "tsup",
+    "prepack": "npm run build",
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest watch",
     "test:unit": "vitest run",
     "test:browser": "playwright test",
-    "lint": "tsc --noEmit"
+    "test:artifact": "node ./tests/packaging/validate-package-artifact.mjs",
+    "lint": "tsc --noEmit",
+    "validate:rc": "npm run lint && npm run test:run && npm run test:browser && npm run test:artifact"
   },
-  "keywords": [],
+  "keywords": [
+    "browser",
+    "keyboard-shortcuts",
+    "hotkeys",
+    "layout-independent",
+    "event-code",
+    "event-key"
+  ],
   "author": "fabio barracano <that.webdev.dude@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/that-webdev-dude/keyplane.git"
+  },
+  "homepage": "https://github.com/that-webdev-dude/keyplane#readme",
+  "bugs": {
+    "url": "https://github.com/that-webdev-dude/keyplane/issues"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

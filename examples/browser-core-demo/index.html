@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keyplane Browser Core Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Keyplane demo</p>
+        <h1>Physical and semantic meanings stay separate.</h1>
+        <p class="intro">
+          Press keys in the event capture area to inspect raw browser events, a
+          runtime-like physical event meaning, a runtime-like semantic event
+          meaning, and the labels Keyplane renders for registered bindings.
+        </p>
+      </section>
+
+      <section class="panel layout">
+        <div class="stack">
+          <label class="label" for="capture">Event capture area</label>
+          <div id="capture" class="capture" tabindex="0">
+            Focus here and press keys
+          </div>
+          <p class="hint">
+            Try <code>Control+Minus</code>, <code>key:Control+-</code>,
+            <code>KeyZ</code>, <code>key:z</code>, or
+            <code>Control+KeyK then Control+KeyC</code>.
+          </p>
+        </div>
+
+        <div class="stack">
+          <span class="label">Scope controls</span>
+          <div class="scope-controls">
+            <button id="scope-editor" class="scope-button" type="button">Editor</button>
+            <button id="scope-palette" class="scope-button" type="button">Palette</button>
+            <button id="scope-global" class="scope-button" type="button">No named scope</button>
+          </div>
+          <p class="hint">
+            Press <code>KeyP</code> while <code>palette</code> is active to hit the
+            scoped example binding.
+          </p>
+        </div>
+
+        <div class="stack">
+          <label class="label" for="editable">Editable target</label>
+          <input
+            id="editable"
+            class="editable"
+            type="text"
+            placeholder="Default bindings are blocked here"
+          />
+          <p class="hint">
+            The demo includes one binding with <code>allowInEditable: true</code>
+            so you can compare the behavior.
+          </p>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Raw Event</h2>
+          <pre id="raw-event" class="code"></pre>
+        </article>
+
+        <article class="panel">
+          <h2>Runtime-Like Meanings</h2>
+          <pre id="derived-meanings" class="code"></pre>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Registered Bindings</h2>
+        <div id="binding-list" class="binding-list"></div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Recent Matches</h2>
+          <ol id="match-log" class="log"></ol>
+        </article>
+
+        <article class="panel">
+          <h2>Notes</h2>
+          <ul class="notes">
+            <li>String bindings default to physical mode.</li>
+            <li>Semantic bindings use the <code>key:</code> prefix.</li>
+            <li>Formatting is display-only.</li>
+            <li>Only one named scope is active at a time.</li>
+            <li>Exact-prefix conflicts stay rejected in v1.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
